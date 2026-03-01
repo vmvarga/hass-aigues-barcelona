@@ -15,6 +15,7 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 
 from .api import AiguesApiClient
+from .api import RecaptchaRequired
 from .const import API_ERROR_TOKEN_REVOKED
 from .const import CONF_CONTRACT
 from .const import DOMAIN
@@ -61,31 +62,35 @@ async def validate_credentials(
     if not check_valid_nif(username):
         raise InvalidUsername
 
+    api = AiguesApiClient(username, password)
     try:
-        api = AiguesApiClient(username, password)
         if token:
             api.set_token(token)
         else:
             _LOGGER.info("Attempting to login")
-            login = await hass.async_add_executor_job(api.login)
-            if not login:
+            new_token = await hass.async_add_executor_job(api.login)
+            if not new_token:
                 raise InvalidAuth
             _LOGGER.info("Login succeeded!")
+            token = new_token
         contracts = await hass.async_add_executor_job(api.contracts, username)
 
         available_contracts = [x["contractDetail"]["contractNumber"] for x in contracts]
-        return {CONF_CONTRACT: available_contracts}
+        result = {CONF_CONTRACT: available_contracts}
+        if token:
+            result[CONF_TOKEN] = token
+        return result
+
+    except RecaptchaRequired:
+        raise RecaptchaAppeared
+
+    except (InvalidAuth, InvalidUsername):
+        raise
 
     except Exception:
         _LOGGER.debug(f"Last data: {api.last_response}")
         if not api.last_response:
             return False
-
-        if (
-            isinstance(api.last_response, dict)
-            and api.last_response.get("path") == "recaptchaClientResponse"
-        ):
-            raise RecaptchaAppeared
 
         if (
             isinstance(api.last_response, str)

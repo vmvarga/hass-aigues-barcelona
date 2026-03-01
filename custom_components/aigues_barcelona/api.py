@@ -10,8 +10,13 @@ from .const import API_HOST
 from .version import VERSION
 
 TIMEOUT = 60
+TOKEN_REFRESH_MARGIN_SECONDS = 600
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
+
+
+class RecaptchaRequired(Exception):
+    """Raised when the API demands a captcha challenge."""
 
 
 class AiguesApiClient:
@@ -90,11 +95,14 @@ class AiguesApiClient:
         return resp
 
     def login(self, user=None, password=None, recaptcha=None):
+        """Authenticate and return the access_token string, or False on failure.
+
+        Raises RecaptchaRequired when the API demands a captcha challenge.
+        """
         if user is None:
             user = self._username
         if password is None:
             password = self._password
-        # recaptcha seems to not be validated?
         if recaptcha is None:
             recaptcha = ""
 
@@ -113,21 +121,27 @@ class AiguesApiClient:
 
         r = self._query(path, query, body, headers, method="POST")
 
-        _LOGGER.debug(r)
-        error = r.json().get("errorMessage", None)
+        response_data = r.json()
+        _LOGGER.debug("getToken response keys: %s", list(response_data.keys()))
+
+        if (
+            isinstance(self.last_response, dict)
+            and self.last_response.get("path") == "recaptchaClientResponse"
+        ):
+            raise RecaptchaRequired
+
+        error = response_data.get("errorMessage", None)
         if error:
             _LOGGER.warning(error)
             return False
 
-        access_token = r.json().get("access_token", None)
+        access_token = response_data.get("access_token", None)
         if not access_token:
             _LOGGER.warning("Access token missing")
             return False
 
-        return True
-
-        # set as cookie: ofexTokenJwt
-        # https://www.aiguesdebarcelona.cat/ca/area-clientes
+        self.set_token(access_token)
+        return access_token
 
     def set_token(self, token: str):
         host = ".".join(self.api_host.split(".")[1:])
@@ -152,6 +166,21 @@ class AiguesApiClient:
         NOW = datetime.datetime.now()
 
         return NOW >= expires
+
+    def get_token_expires_at(self) -> datetime.datetime | None:
+        """Return expiry datetime from the JWT, or None if unavailable."""
+        expires = self._return_token_field("exp")
+        if not expires:
+            return None
+        return datetime.datetime.fromtimestamp(expires)
+
+    def is_token_expiring_soon(self, margin_seconds: int = TOKEN_REFRESH_MARGIN_SECONDS) -> bool:
+        """Return True when the token is still valid but expires within *margin_seconds*."""
+        expires_at = self.get_token_expires_at()
+        if expires_at is None:
+            return True
+        remaining = (expires_at - datetime.datetime.now()).total_seconds()
+        return 0 < remaining <= margin_seconds
 
     def profile(self, user=None):
         if user is None:

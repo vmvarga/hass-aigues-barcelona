@@ -29,7 +29,7 @@
           "token": "OAuth Token"
         },
         "title": "Relogin - Provide user OAuth Token",
-        "description": "Since Aig\u00fces de Barcelona uses Recaptcha, you'll need to provide the Token manually.\nPlease paste the token string here (starts with ey....)"
+        "description": "Automatic token refresh was not possible (captcha required or credentials rejected).\nPlease log in at the Aig\u00fces de Barcelona website, copy the cookie 'ofexTokenJwt' and paste the token here (starts with ey....)."
       }
     }
   }

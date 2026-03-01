@@ -35,6 +35,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.update_coordinator import TimestampDataUpdateCoordinator
 
 from .api import AiguesApiClient
+from .api import RecaptchaRequired
 from .const import API_ERROR_TOKEN_REVOKED
 from .const import ATTR_LAST_MEASURE
 from .const import CONF_CONTRACT
@@ -69,7 +70,10 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
     contadores = list()
 
     for contract in contracts:
-        coordinator = ContratoAgua(hass, username, password, contract, token=token)
+        coordinator = ContratoAgua(
+            hass, username, password, contract,
+            token=token, config_entry=config_entry,
+        )
         contadores.append(ContadorAgua(coordinator))
 
     # postpone first refresh to speed up startup
@@ -100,25 +104,23 @@ class ContratoAgua(TimestampDataUpdateCoordinator):
         contract: str,
         token: str = None,
         prev_data=None,
+        config_entry=None,
     ) -> None:
         """Initialize the data handler."""
         self.reset = prev_data is None
+        self._config_entry = config_entry
 
         self.contract = contract.upper()
         self.id = contract.lower()
         self.internal_sensor_id = f"sensor.contador_{self.id}"
 
         if not hass.data[DOMAIN].get(self.contract):
-            # init data shared store
             hass.data[DOMAIN][self.contract] = {}
 
-        # create alias
         self._data = hass.data[DOMAIN][self.contract]
 
-        # WARN define a pointer to this object
         hass.data[DOMAIN][self.contract]["coordinator"] = self
 
-        # the api object
         self._api = AiguesApiClient(username, password, contract)
         if token:
             self._api.set_token(token)
@@ -133,18 +135,43 @@ class ContratoAgua(TimestampDataUpdateCoordinator):
     def __repr__(self):
         return f"<{self.__class__.__name__} {self.contract}>"
 
+    async def _try_refresh_token(self) -> None:
+        """Re-authenticate using stored credentials and persist the new token.
+
+        Raises ConfigEntryAuthFailed when the refresh is not possible
+        (e.g. captcha required or invalid credentials).
+        """
+        _LOGGER.info("Token expiring soon – attempting automatic refresh")
+        try:
+            new_token = await self.hass.async_add_executor_job(self._api.login)
+        except RecaptchaRequired:
+            _LOGGER.warning("Captcha required – automatic refresh not possible")
+            raise ConfigEntryAuthFailed(
+                "Captcha required, manual re-authentication needed"
+            )
+        except Exception as exc:
+            _LOGGER.warning("Automatic token refresh failed: %s", exc)
+            raise ConfigEntryAuthFailed from exc
+
+        if not new_token:
+            _LOGGER.warning("Automatic token refresh returned empty token")
+            raise ConfigEntryAuthFailed("Login returned no token")
+
+        _LOGGER.info("Token refreshed successfully")
+        if self._config_entry:
+            self.hass.config_entries.async_update_entry(
+                self._config_entry,
+                data={**self._config_entry.data, CONF_TOKEN: new_token},
+            )
+
     async def _async_update_data(self):
         _LOGGER.info(f"Updating coordinator data for {self.contract}")
         TODAY = datetime.now()
         LAST_WEEK = TODAY - timedelta(days=7)
         LAST_TIME_DAYS = None
 
-        # last_measurement = await self.get_last_measurement_stored()
-        # _LOGGER.info("Last stored measurement: %s", last_measurement)
-
         try:
             previous = datetime.fromisoformat(self._data.get(CONF_STATE, ""))
-            # FIX: TypeError: can't subtract offset-naive and offset-aware datetimes
             previous = previous.replace(tzinfo=None)
             if previous:
                 LAST_TIME_DAYS = (TODAY - previous).days
@@ -155,12 +182,20 @@ class ContratoAgua(TimestampDataUpdateCoordinator):
             _LOGGER.warning("Skipping request update data - too early")
             return
 
+        if self._api.is_token_expired():
+            await self._try_refresh_token()
+        elif self._api.is_token_expiring_soon():
+            try:
+                await self._try_refresh_token()
+            except ConfigEntryAuthFailed:
+                _LOGGER.info(
+                    "Proactive refresh failed but token is still valid – continuing"
+                )
+
         consumptions = None
         try:
             if self._api.is_token_expired():
                 raise ConfigEntryAuthFailed
-            # TODO: change once recaptcha is fiexd
-            # await self.hass.async_add_executor_job(self._api.login)
             consumptions = await self.hass.async_add_executor_job(
                 self._api.consumptions, LAST_WEEK, TODAY, self.contract
             )
@@ -178,12 +213,10 @@ class ContratoAgua(TimestampDataUpdateCoordinator):
 
         self._data["consumptions"] = consumptions
 
-        # get last entry - most updated
         metric = consumptions[-1]
         self._data[CONF_VALUE] = metric["accumulatedConsumption"]
         self._data[CONF_STATE] = metric["datetime"]
 
-        # await self._clear_statistics()
         try:
             await self._async_import_statistics(consumptions)
         except:
@@ -272,8 +305,8 @@ class ContratoAgua(TimestampDataUpdateCoordinator):
         today = datetime.now()
         one_year_ago = today - timedelta(days=days)
 
-        if self._api.is_token_expired():
-            raise ConfigEntryAuthFailed
+        if self._api.is_token_expired() or self._api.is_token_expiring_soon():
+            await self._try_refresh_token()
 
         current_date = one_year_ago
         while current_date < today:
