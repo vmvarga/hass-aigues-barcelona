@@ -241,7 +241,7 @@ class AiguesBarcelonaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
 
-class AiguesBarcelonaOptionsFlow(config_entries.OptionsFlow):
+class AiguesBarcelonaOptionsFlow(config_entries.OptionsFlow, domain=DOMAIN):
     """Options flow for Aigues de Barcelona."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
