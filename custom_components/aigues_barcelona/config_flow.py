@@ -129,7 +129,7 @@ class AiguesBarcelonaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         config_entry: config_entries.ConfigEntry,
     ) -> "AiguesBarcelonaOptionsFlow":
         """Return the options flow."""
-        return AiguesBarcelonaOptionsFlow(config_entry)
+        return AiguesBarcelonaOptionsFlow()
 
     async def async_step_token(
         self, user_input: dict[str, Any] | None = None
@@ -252,10 +252,6 @@ class AiguesBarcelonaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 class AiguesBarcelonaOptionsFlow(config_entries.OptionsFlow):
     """Options flow for Aigues de Barcelona."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        self.config_entry = config_entry
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
