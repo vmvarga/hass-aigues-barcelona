@@ -93,6 +93,12 @@ async def validate_credentials(
             return False
 
         if (
+            isinstance(api.last_response, dict)
+            and api.last_response.get("path") == "recaptchaClientResponse"
+        ):
+            raise RecaptchaAppeared
+
+        if (
             isinstance(api.last_response, str)
             and api.last_response == API_ERROR_TOKEN_REVOKED
         ):
