@@ -12,6 +12,7 @@ from homeassistant.const import CONF_PASSWORD
 from homeassistant.const import CONF_TOKEN
 from homeassistant.const import CONF_USERNAME
 from homeassistant.core import HomeAssistant
+from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 
@@ -121,6 +122,14 @@ async def validate_credentials(
 class AiguesBarcelonaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 2
     stored_input = dict()
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> "AiguesBarcelonaOptionsFlow":
+        """Return the options flow."""
+        return AiguesBarcelonaOptionsFlow(config_entry)
 
     async def async_step_token(
         self, user_input: dict[str, Any] | None = None
@@ -241,7 +250,7 @@ class AiguesBarcelonaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
 
-class AiguesBarcelonaOptionsFlow(config_entries.OptionsFlow, domain=DOMAIN):
+class AiguesBarcelonaOptionsFlow(config_entries.OptionsFlow):
     """Options flow for Aigues de Barcelona."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
