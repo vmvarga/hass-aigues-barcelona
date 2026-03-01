@@ -39,6 +39,7 @@ class AiguesApiClient:
         self._password = password
         self._contract = contract
         self.last_response = None
+        self._last_known_token: str | None = None
 
     def _generate_url(self, path, query) -> str:
         query_proc = ""
@@ -92,6 +93,10 @@ class AiguesApiClient:
         if resp.status_code == 429:
             raise Exception(f"Rate-Limited: {msg}")
 
+        renewed = self.check_token_renewed()
+        if renewed:
+            _LOGGER.debug("Token was renewed by server after API call to %s", path)
+
         return resp
 
     def login(self, user=None, password=None, recaptcha=None):
@@ -143,6 +148,10 @@ class AiguesApiClient:
         self.set_token(access_token)
         return access_token
 
+    def get_current_token(self) -> str | None:
+        """Return the current token value from the session cookie jar."""
+        return self.cli.cookies.get_dict().get(API_COOKIE_TOKEN)
+
     def set_token(self, token: str):
         host = ".".join(self.api_host.split(".")[1:])
         cookie_data = {
@@ -154,7 +163,17 @@ class AiguesApiClient:
             "rest": {"HttpOnly": True, "SameSite": "None"},
         }
         cookie = requests.cookies.create_cookie(**cookie_data)
-        return self.cli.cookies.set_cookie(cookie)
+        self.cli.cookies.set_cookie(cookie)
+        self._last_known_token = token
+
+    def check_token_renewed(self) -> str | None:
+        """Check if the server replaced the token cookie. Returns the new token or None."""
+        current = self.get_current_token()
+        if current and current != self._last_known_token:
+            _LOGGER.info("Server renewed the token cookie")
+            self._last_known_token = current
+            return current
+        return None
 
     def is_token_expired(self) -> bool:
         """Check if Token in cookie has expired or not."""
@@ -196,6 +215,18 @@ class AiguesApiClient:
 
         assert r.json().get("user_data"), "User data missing"
         return r.json()
+
+    def keep_alive(self) -> str | None:
+        """Call getProfile to keep the session alive.
+
+        Returns the new token string if the server renewed it, otherwise None.
+        """
+        try:
+            self.profile()
+            return self.check_token_renewed()
+        except Exception as exc:
+            _LOGGER.warning("Keep-alive call failed: %s", exc)
+            return None
 
     def contracts(self, user=None, status=["ASSIGNED", "PENDING"]):
         if user is None:

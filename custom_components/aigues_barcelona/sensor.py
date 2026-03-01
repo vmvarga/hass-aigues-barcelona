@@ -105,13 +105,40 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
         hass.bus.async_listen_once(EVENT_HOMEASSISTANT_START, async_first_refresh)
 
     async def _periodic_token_check(_now):
-        """Check token expiry every few minutes and refresh if needed."""
+        """Keep the session alive via getProfile and refresh the token if needed."""
         for sensor in contadores:
-            api = sensor.coordinator._api
-            if api.is_token_expired() or api.is_token_expiring_soon():
-                _LOGGER.info("Periodic token check: token needs refresh")
+            coordinator = sensor.coordinator
+            api = coordinator._api
+
+            if api.is_token_expired():
+                _LOGGER.info("Periodic check: token expired – attempting re-login")
                 try:
-                    await sensor.coordinator._try_refresh_token()
+                    await coordinator._try_refresh_token()
+                except ConfigEntryAuthFailed:
+                    _LOGGER.warning(
+                        "Periodic token refresh failed – reauth may be needed"
+                    )
+                continue
+
+            _LOGGER.debug("Periodic keep-alive: calling getProfile")
+            new_token = await hass.async_add_executor_job(api.keep_alive)
+            if new_token:
+                _LOGGER.info("Keep-alive: server renewed token, persisting")
+                if coordinator._config_entry:
+                    hass.config_entries.async_update_entry(
+                        coordinator._config_entry,
+                        data={
+                            **coordinator._config_entry.data,
+                            CONF_TOKEN: new_token,
+                        },
+                    )
+            elif api.is_token_expiring_soon():
+                _LOGGER.info(
+                    "Keep-alive did not renew token and it expires soon – "
+                    "attempting re-login"
+                )
+                try:
+                    await coordinator._try_refresh_token()
                 except ConfigEntryAuthFailed:
                     _LOGGER.warning(
                         "Periodic token refresh failed – reauth may be needed"
@@ -244,6 +271,14 @@ class ContratoAgua(TimestampDataUpdateCoordinator):
         if not consumptions:
             _LOGGER.error("No consumptions available")
             return False
+
+        renewed = self._api.check_token_renewed()
+        if renewed and self._config_entry:
+            _LOGGER.info("Token renewed by server during data update, persisting")
+            self.hass.config_entries.async_update_entry(
+                self._config_entry,
+                data={**self._config_entry.data, CONF_TOKEN: renewed},
+            )
 
         self.last_api_success = datetime.now()
         self._data["consumptions"] = consumptions
