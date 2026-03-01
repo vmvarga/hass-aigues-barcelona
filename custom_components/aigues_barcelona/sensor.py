@@ -45,7 +45,9 @@ from homeassistant.helpers.update_coordinator import TimestampDataUpdateCoordina
 from .api import AiguesApiClient
 from .api import RecaptchaRequired
 from .const import API_ERROR_TOKEN_REVOKED
+from .const import ATTR_LAST_API_SUCCESS
 from .const import ATTR_LAST_MEASURE
+from .const import ATTR_TOKEN_EXPIRY
 from .const import CONF_CONTRACT
 from .const import CONF_SCAN_INTERVAL
 from .const import CONF_VALUE
@@ -136,6 +138,7 @@ class ContratoAgua(TimestampDataUpdateCoordinator):
         self._api = AiguesApiClient(username, password, contract)
         if token:
             self._api.set_token(token)
+        self.last_api_success: datetime | None = None
 
         super().__init__(
             hass,
@@ -223,6 +226,7 @@ class ContratoAgua(TimestampDataUpdateCoordinator):
             _LOGGER.error("No consumptions available")
             return False
 
+        self.last_api_success = datetime.now()
         self._data["consumptions"] = consumptions
 
         metric = consumptions[-1]
@@ -366,6 +370,18 @@ class ContadorAgua(CoordinatorEntity, SensorEntity):
         return last_measure
 
     @property
+    def available(self) -> bool:
+        return self.coordinator.last_update_success and self.native_value is not None
+
+    @property
     def extra_state_attributes(self):
         attrs = {ATTR_LAST_MEASURE: self.last_measurement}
+
+        if self.coordinator.last_api_success:
+            attrs[ATTR_LAST_API_SUCCESS] = self.coordinator.last_api_success.isoformat()
+
+        token_expiry = self.coordinator._api.get_token_expires_at()
+        if token_expiry:
+            attrs[ATTR_TOKEN_EXPIRY] = token_expiry.isoformat()
+
         return attrs

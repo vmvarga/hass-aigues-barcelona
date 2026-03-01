@@ -7,6 +7,8 @@ CONF_VALUE = "value"
 CONF_SCAN_INTERVAL = "scan_interval"
 
 ATTR_LAST_MEASURE = "Last measure"
+ATTR_LAST_API_SUCCESS = "Last API success"
+ATTR_TOKEN_EXPIRY = "Token expiry"
 
 DEFAULT_SCAN_PERIOD = 14400
 
