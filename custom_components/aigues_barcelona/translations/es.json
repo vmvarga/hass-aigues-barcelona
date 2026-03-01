@@ -34,12 +34,16 @@
     }
   },
   "options": {
+    "error": {
+      "min_scan_interval": "El intervalo m\u00ednimo de actualizaci\u00f3n es de 5 minutos"
+    },
     "step": {
       "init": {
         "data": {
-          "scan_interval": "Intervalo de actualización"
+          "scan_interval": "Intervalo de actualizaci\u00f3n (minutos)"
         },
-        "title": "Opciones de Aigües de Barcelona"
+        "description": "Introduce el intervalo de actualizaci\u00f3n en minutos (m\u00ednimo 5).",
+        "title": "Opciones de Aig\u00fces de Barcelona"
       }
     }
   }

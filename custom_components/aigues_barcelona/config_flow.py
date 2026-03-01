@@ -20,9 +20,10 @@ from .api import AiguesApiClient
 from .api import RecaptchaRequired
 from .const import API_ERROR_TOKEN_REVOKED
 from .const import CONF_CONTRACT
+from .const import CONF_SCAN_INTERVAL
 from .const import DEFAULT_SCAN_PERIOD
 from .const import DOMAIN
-from .const import CONF_SCAN_INTERVAL
+from .const import MIN_SCAN_PERIOD
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,13 +35,8 @@ ACCOUNT_CONFIG_SCHEMA = vol.Schema(
 )
 TOKEN_SCHEMA = vol.Schema({vol.Required(CONF_TOKEN): cv.string})
 
-SCAN_INTERVAL_CHOICES = {
-    3600: "1 hour",
-    7200: "2 hours",
-    14400: "4 hours",
-    21600: "6 hours",
-    43200: "12 hours",
-}
+DEFAULT_SCAN_MINUTES = DEFAULT_SCAN_PERIOD // 60
+MIN_SCAN_MINUTES = MIN_SCAN_PERIOD // 60
 
 
 def check_valid_nif(username: str) -> bool:
@@ -257,23 +253,33 @@ class AiguesBarcelonaOptionsFlow(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Manage integration options."""
+        errors = {}
         if user_input is not None:
-            self.hass.async_create_task(
-                self.hass.config_entries.async_reload(self.config_entry.entry_id)
-            )
-            return self.async_create_entry(title="", data=user_input)
+            minutes = user_input.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_MINUTES)
+            if minutes < MIN_SCAN_MINUTES:
+                errors[CONF_SCAN_INTERVAL] = "min_scan_interval"
+            else:
+                self.hass.async_create_task(
+                    self.hass.config_entries.async_reload(self.config_entry.entry_id)
+                )
+                return self.async_create_entry(
+                    title="", data={CONF_SCAN_INTERVAL: minutes * 60}
+                )
 
-        current = self.config_entry.options.get(
+        current_seconds = self.config_entry.options.get(
             CONF_SCAN_INTERVAL, DEFAULT_SCAN_PERIOD
         )
+        current_minutes = current_seconds // 60
         schema = vol.Schema(
             {
-                vol.Required(CONF_SCAN_INTERVAL, default=current): vol.In(
-                    SCAN_INTERVAL_CHOICES
-                ),
+                vol.Required(
+                    CONF_SCAN_INTERVAL, default=current_minutes
+                ): vol.Coerce(int),
             }
         )
-        return self.async_show_form(step_id="init", data_schema=schema)
+        return self.async_show_form(
+            step_id="init", data_schema=schema, errors=errors
+        )
 
 
 class AlreadyConfigured(HomeAssistantError):

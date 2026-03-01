@@ -34,11 +34,15 @@
     }
   },
   "options": {
+    "error": {
+      "min_scan_interval": "Minimum update interval is 5 minutes"
+    },
     "step": {
       "init": {
         "data": {
-          "scan_interval": "Update interval"
+          "scan_interval": "Update interval (minutes)"
         },
+        "description": "Enter the data update interval in minutes (minimum 5).",
         "title": "Aig\u00fces de Barcelona options"
       }
     }

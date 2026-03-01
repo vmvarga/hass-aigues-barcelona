@@ -39,6 +39,7 @@ from homeassistant.core import callback
 from homeassistant.core import CoreState
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.update_coordinator import TimestampDataUpdateCoordinator
 
@@ -53,6 +54,7 @@ from .const import CONF_SCAN_INTERVAL
 from .const import CONF_VALUE
 from .const import DEFAULT_SCAN_PERIOD
 from .const import DOMAIN
+from .const import TOKEN_CHECK_INTERVAL
 
 from typing import Optional
 
@@ -101,6 +103,23 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
         await async_first_refresh()
     else:
         hass.bus.async_listen_once(EVENT_HOMEASSISTANT_START, async_first_refresh)
+
+    async def _periodic_token_check(_now):
+        """Check token expiry every few minutes and refresh if needed."""
+        for sensor in contadores:
+            api = sensor.coordinator._api
+            if api.is_token_expired() or api.is_token_expiring_soon():
+                _LOGGER.info("Periodic token check: token needs refresh")
+                try:
+                    await sensor.coordinator._try_refresh_token()
+                except ConfigEntryAuthFailed:
+                    _LOGGER.warning(
+                        "Periodic token refresh failed – reauth may be needed"
+                    )
+
+    async_track_time_interval(
+        hass, _periodic_token_check, timedelta(seconds=TOKEN_CHECK_INTERVAL)
+    )
 
     _LOGGER.info("about to add entities")
     async_add_entities(contadores)

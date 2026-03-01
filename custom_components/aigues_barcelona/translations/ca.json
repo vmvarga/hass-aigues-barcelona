@@ -34,12 +34,16 @@
     }
   },
   "options": {
+    "error": {
+      "min_scan_interval": "L'interval m\u00ednim d'actualitzaci\u00f3 \u00e9s de 5 minuts"
+    },
     "step": {
       "init": {
         "data": {
-          "scan_interval": "Interval d'actualització"
+          "scan_interval": "Interval d'actualitzaci\u00f3 (minuts)"
         },
-        "title": "Opcions d'Aigües de Barcelona"
+        "description": "Introdueix l'interval d'actualitzaci\u00f3 en minuts (m\u00ednim 5).",
+        "title": "Opcions d'Aig\u00fces de Barcelona"
       }
     }
   }
