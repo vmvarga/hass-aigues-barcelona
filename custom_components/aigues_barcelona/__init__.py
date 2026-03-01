@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.config_entries import SOURCE_REAUTH
 from homeassistant.const import CONF_PASSWORD
 from homeassistant.const import CONF_TOKEN
 from homeassistant.const import CONF_USERNAME
@@ -52,11 +51,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if api.is_token_expired() or api.is_token_expiring_soon():
         refreshed = await _try_startup_refresh(hass, entry, api)
         if not refreshed and api.is_token_expired():
-            await hass.config_entries.flow.async_init(
-                DOMAIN,
-                context={"source": SOURCE_REAUTH},
-                data=entry,
-            )
+            entry.async_start_reauth(hass)
             return False
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
