@@ -47,6 +47,7 @@ from .api import RecaptchaRequired
 from .const import API_ERROR_TOKEN_REVOKED
 from .const import ATTR_LAST_MEASURE
 from .const import CONF_CONTRACT
+from .const import CONF_SCAN_INTERVAL
 from .const import CONF_VALUE
 from .const import DEFAULT_SCAN_PERIOD
 from .const import DOMAIN
@@ -74,6 +75,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
     password = config_entry.data[CONF_PASSWORD]
     contracts = config_entry.data[CONF_CONTRACT]
     token = config_entry.data.get(CONF_TOKEN)
+    scan_interval = config_entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_PERIOD)
 
     contadores = list()
 
@@ -81,6 +83,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
         coordinator = ContratoAgua(
             hass, username, password, contract,
             token=token, config_entry=config_entry,
+            scan_interval=scan_interval,
         )
         contadores.append(ContadorAgua(coordinator))
 
@@ -113,6 +116,7 @@ class ContratoAgua(TimestampDataUpdateCoordinator):
         token: str = None,
         prev_data=None,
         config_entry=None,
+        scan_interval: int = DEFAULT_SCAN_PERIOD,
     ) -> None:
         """Initialize the data handler."""
         self.reset = prev_data is None
@@ -137,7 +141,7 @@ class ContratoAgua(TimestampDataUpdateCoordinator):
             hass,
             _LOGGER,
             name=self.id,
-            update_interval=timedelta(seconds=DEFAULT_SCAN_PERIOD),
+            update_interval=timedelta(seconds=scan_interval),
         )
 
     def __repr__(self):

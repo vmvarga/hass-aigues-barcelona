@@ -32,5 +32,15 @@
         "description": "Automatic token refresh was not possible (captcha required or credentials rejected).\nPlease log in at the Aig\u00fces de Barcelona website, copy the cookie 'ofexTokenJwt' and paste the token here (starts with ey....)."
       }
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "scan_interval": "Update interval"
+        },
+        "title": "Aig\u00fces de Barcelona options"
+      }
+    }
   }
 }

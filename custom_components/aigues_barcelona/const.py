@@ -4,6 +4,7 @@ DOMAIN = "aigues_barcelona"
 
 CONF_CONTRACT = "contract"
 CONF_VALUE = "value"
+CONF_SCAN_INTERVAL = "scan_interval"
 
 ATTR_LAST_MEASURE = "Last measure"
 

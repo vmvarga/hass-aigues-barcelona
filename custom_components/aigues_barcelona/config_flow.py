@@ -11,6 +11,7 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_PASSWORD
 from homeassistant.const import CONF_TOKEN
 from homeassistant.const import CONF_USERNAME
+from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 
@@ -18,7 +19,9 @@ from .api import AiguesApiClient
 from .api import RecaptchaRequired
 from .const import API_ERROR_TOKEN_REVOKED
 from .const import CONF_CONTRACT
+from .const import DEFAULT_SCAN_PERIOD
 from .const import DOMAIN
+from .const import CONF_SCAN_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -29,6 +32,14 @@ ACCOUNT_CONFIG_SCHEMA = vol.Schema(
     }
 )
 TOKEN_SCHEMA = vol.Schema({vol.Required(CONF_TOKEN): cv.string})
+
+SCAN_INTERVAL_CHOICES = {
+    3600: "1 hour",
+    7200: "2 hours",
+    14400: "4 hours",
+    21600: "6 hours",
+    43200: "12 hours",
+}
 
 
 def check_valid_nif(username: str) -> bool:
@@ -221,12 +232,43 @@ class AiguesBarcelonaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             nif_oculto = user_input[CONF_USERNAME][-3:][0:2]
 
             return self.async_create_entry(
-                title=f"Aigua ****{nif_oculto}", data={**user_input, **info}
+                title=f"Aigua ****{nif_oculto}", data={**user_input, **info},
+                options={CONF_SCAN_INTERVAL: DEFAULT_SCAN_PERIOD},
             )
 
         return self.async_show_form(
             step_id="user", data_schema=ACCOUNT_CONFIG_SCHEMA, errors=errors
         )
+
+
+class AiguesBarcelonaOptionsFlow(config_entries.OptionsFlow):
+    """Options flow for Aigues de Barcelona."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize options flow."""
+        self.config_entry = config_entry
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Manage integration options."""
+        if user_input is not None:
+            self.hass.async_create_task(
+                self.hass.config_entries.async_reload(self.config_entry.entry_id)
+            )
+            return self.async_create_entry(title="", data=user_input)
+
+        current = self.config_entry.options.get(
+            CONF_SCAN_INTERVAL, DEFAULT_SCAN_PERIOD
+        )
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_SCAN_INTERVAL, default=current): vol.In(
+                    SCAN_INTERVAL_CHOICES
+                ),
+            }
+        )
+        return self.async_show_form(step_id="init", data_schema=schema)
 
 
 class AlreadyConfigured(HomeAssistantError):
