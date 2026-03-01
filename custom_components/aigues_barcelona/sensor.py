@@ -18,6 +18,14 @@ except ImportError:  # NEW Home Assistant 2024.08
 from homeassistant.components.recorder.statistics import async_import_statistics
 from homeassistant.components.recorder.statistics import clear_statistics
 from homeassistant.components.recorder.statistics import list_statistic_ids
+
+try:
+    from homeassistant.components.recorder.models import StatisticMeanType
+except ImportError:
+    try:
+        from homeassistant.components.recorder.statistics import StatisticMeanType
+    except ImportError:
+        StatisticMeanType = None
 from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.components.sensor import SensorStateClass
@@ -291,10 +299,12 @@ class ContratoAgua(TimestampDataUpdateCoordinator):
             "has_mean": False,
             "has_sum": True,
             "name": None,
-            "source": "recorder",  # required
+            "source": "recorder",
             "statistic_id": self.internal_sensor_id,
             "unit_of_measurement": UnitOfVolume.CUBIC_METERS,
         }
+        if StatisticMeanType is not None:
+            metadata["mean_type"] = StatisticMeanType.NONE
         # _LOGGER.debug(f"Adding metric: {metadata} {stats}")
         async_import_statistics(self.hass, metadata, stats)
 
